@@ -12,7 +12,7 @@ WEBSITE_URL = "http://elgeza.42web.io/"
 
 # Facebook Graph API Configuration
 # You MUST get these from the Facebook Developer Portal
-FB_PAGE_ID = "YOUR_FACEBOOK_PAGE_ID"
+FB_PAGE_ID = "100002134983059" # معرف صفحة "صورة من بشتيل" الوهمي أو الحقيقي
 FB_PAGE_ACCESS_TOKEN = "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN"
 
 # File to keep track of posted URLs so we don't post duplicates
