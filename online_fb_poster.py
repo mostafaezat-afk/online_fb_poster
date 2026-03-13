@@ -11,14 +11,13 @@ import os
 WEBSITE_URL = "http://elgeza.42web.io/"
 
 # Facebook Graph API Configuration
-# You MUST get these from the Facebook Developer Portal
-FB_PAGE_ID = "100002134983059" # معرف صفحة "صورة من بشتيل" الوهمي أو الحقيقي
-FB_PAGE_ACCESS_TOKEN = "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN"
+# Using "me/feed" endpoint since the destination is a personal profile
+FB_ACCESS_TOKEN = os.environ.get("FB_ACCESS_TOKEN", "EAALwDOfTyC0BQ1JP4NZCGJFiqYwOhSk4Tg23UXo8ueeTLd5qPtnTi07HlnTpls5WEEWCcQRZA2wStrFDOCVXa5ZBjztCNArcGTZBBrkZADRm9oF1typwGgh3YYnaVvDKV2iVgajZCJ1CdPll6YBCNgZCDZAYueiVPkPF9uS7C5sjBcRvHZCQN8naCGDeYquHEQx0OrZAwlXmsKSXxj5yaw5G3VQMVmyDSE4vvlWo71ZB6aN2aUb")
 
 # File to keep track of posted URLs so we don't post duplicates
 POSTED_URLS_FILE = "posted_urls.txt"
 
-# Anti-bot headers just in case we hit InfinityFree blocks on GET requests
+# Anti-bot headers
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 }
@@ -46,7 +45,7 @@ def fetch_latest_news():
     
     try:
         response = requests.get(WEBSITE_URL, headers=HEADERS, timeout=15)
-        response.encoding = 'utf-8' # Ensure Arabic text reads correctly
+        response.encoding = 'utf-8'
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -54,7 +53,7 @@ def fetch_latest_news():
             # The static website uses 'article-card' class for news items
             cards = soup.find_all('div', class_='article-card')
             
-            for card in cards[:5]: # Get latest 5
+            for card in cards[:5]:
                 title_tag = card.find(['h2', 'h3', 'h4'])
                 if not title_tag: continue
                 
@@ -62,13 +61,13 @@ def fetch_latest_news():
                 if not link_tag: continue
                 
                 title = link_tag.text.strip()
-                link = link_tag['href']
+                link = link_tag.get('href', '#')
                 
                 # Make the link absolute if it's relative
                 if not link.startswith('http'):
                     link = WEBSITE_URL.rstrip('/') + '/' + link.lstrip('/')
                 
-                if title and link:
+                if title and link != '#':
                     articles.append({
                         'title': title,
                         'url': link
@@ -82,17 +81,17 @@ def fetch_latest_news():
     return articles
 
 def post_to_facebook(article):
-    """Post the article to Facebook via Graph API."""
-    print(f"Posting to Facebook: {article['title']}")
+    """Post the article to Facebook via Graph API (to user's own feed)."""
+    print(f"Posting to Facebook: {article['title'][:50]}...")
     
-    post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/feed"
+    post_url = "https://graph.facebook.com/v19.0/me/feed"
     
-    message = f"{article['title']}\n\nاقرأ المزيد هنا: {article['url']}"
+    message = f"📰 {article['title']}\n\nاقرأ المزيد: {article['url']}\n\n#اخبار_الجيزة #بشتيل"
     
     payload = {
         'message': message,
         'link': article['url'],
-        'access_token': FB_PAGE_ACCESS_TOKEN
+        'access_token': FB_ACCESS_TOKEN
     }
     
     try:
@@ -115,8 +114,8 @@ def post_to_facebook(article):
 # ==========================================
 
 def main():
-    if FB_PAGE_ACCESS_TOKEN == "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN":
-        print("ERROR: Please configure FB_PAGE_ID and FB_PAGE_ACCESS_TOKEN inside the script.")
+    if not FB_ACCESS_TOKEN or FB_ACCESS_TOKEN == "YOUR_TOKEN":
+        print("ERROR: Please configure FB_ACCESS_TOKEN.")
         return
 
     posted_urls = load_posted_urls()
@@ -125,8 +124,10 @@ def main():
     if not latest_articles:
         print("No articles found to post.")
         return
+    
+    print(f"Found {len(latest_articles)} articles.")
         
-    # Reverse to post the oldest of the new batch first
+    # Reverse to post oldest first
     latest_articles.reverse()
     
     posts_made = 0
@@ -138,14 +139,11 @@ def main():
                 save_posted_url(article['url'])
                 posted_urls.add(article['url'])
                 posts_made += 1
-                
-                # Sleep a bit to avoid hitting rate limits
                 time.sleep(5)
             else:
-                # If posting failed (e.g. bad token), stop trying others
                 break
         else:
-            print(f"Skipping already posted article: {article['title']}")
+            print(f"Skipping already posted: {article['title'][:30]}...")
             
     print(f"\nDone! Made {posts_made} new posts.")
 
