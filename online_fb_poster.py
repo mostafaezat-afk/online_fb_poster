@@ -1,30 +1,22 @@
-import requests
-from bs4 import BeautifulSoup
-import time
+import asyncio
 import os
+import time
 import json
+import requests
+from playwright.async_api import async_playwright
+from bs4 import BeautifulSoup
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
 
-# Our Custom Feed Endpoint URL
-# (You must upload custom_feed.php to your WordPress root first)
-WEBSITE_FEED_URL = "http://elgeza.42web.io/custom_feed.php"
+# Your website URL
+WEBSITE_URL = "http://elgeza.42web.io/"
 
-# Default Website URL (used for building links if the feed doesn't provide absolute ones)
-WEBSITE_URL = "http://elgeza.42web.io"
-
-# The Permanent Facebook Graph API Token you provided
+# The Permanent Facebook Graph API Token
 FB_ACCESS_TOKEN = os.environ.get("FB_ACCESS_TOKEN", "EAALwDOfTyC0BQ1Ik2PvPvTZCqAGXfrTHhbc9f8scLZBYYl08MDm3ZBKmpe8yqldqDmwOq6H5ULhm6Li0CCOr6lPoZBZBznZAWlmIf0N9cB0MyATL1hZCWlP82cf7klZBGTitqCRbNvIA8BUTuS91JM0bXz9pr0lSZCyS2jocl2TMNNjsyAeJVr2Eq8gNVR41lOnLj4BDZB")
 
 POSTED_URLS_FILE = "posted_urls.txt"
-
-# Modern User-Agent that most free hosts prefer 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'application/json'
-}
 
 # ==========================================
 # HELPER FUNCTIONS
@@ -40,57 +32,33 @@ def save_posted_url(url):
     with open(POSTED_URLS_FILE, 'a', encoding='utf-8') as f:
         f.write(url + "\n")
 
-def fetch_custom_feed():
-    """Fetch JSON news feed from our custom endpoint."""
-    print(f"Fetching news from {WEBSITE_FEED_URL}...")
+async def fetch_news_via_browser():
+    """Fetch news by simulating a real browser to bypass InfinityFree logic."""
+    print(f"Opening browser to load {WEBSITE_URL}...")
     articles = []
     
-    try:
-        # Requesting our custom JSON endpoint will bypass normal browser-checking
-        response = requests.get(WEBSITE_FEED_URL, headers=HEADERS, timeout=20)
+    async with async_playwright() as p:
+        # Launch headless browser
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            viewport={'width': 1280, 'height': 720}
+        )
+        page = await context.new_page()
         
-        if response.status_code == 200:
-            try:
-                # Expecting a JSON array of post objects
-                feed_data = response.json()
-                
-                for item in feed_data:
-                    title = item.get('title', '')
-                    url = item.get('url', '')
-                    summary = item.get('summary', '')
-                    
-                    if title and url:
-                        articles.append({
-                            'title': title,
-                            'url': url,
-                            'summary': summary
-                        })
-                        print(f"-> Found ({url}): {title[:50]}...")
-            except json.JSONDecodeError:
-                print("Error: The file returned from the site was not valid JSON.")
-                print(f"Response preview: {response.text[:200]}")
-        else:
-            print(f"Failed. Server returned status {response.status_code}")
+        try:
+            # Go to site and wait until the network is idle (JS challenge finished)
+            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=30000)
             
-    except requests.exceptions.RequestException as e:
-        print(f"Network error: {e}")
-        
-    return articles
-
-def fetch_scraper_fallback():
-    """Fallback: Attempt to parse the static front page with cloudscraper."""
-    import cloudscraper
-    print("Trying fallback via cloudscraper...")
-    articles = []
-    
-    try:
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(WEBSITE_URL, timeout=20)
-        response.encoding = 'utf-8'
-        
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # Look for recent articles based on the theme HTML observed
+            # Additional wait just in case
+            await page.wait_for_timeout(3000)
+            
+            # Get the fully rendered final HTML
+            html_content = await page.content()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Look for recent articles based on the theme HTML
             cards = soup.find_all('div', class_='article-card')
             
             for card in cards[:5]:
@@ -115,12 +83,14 @@ def fetch_scraper_fallback():
                         'url': link,
                         'summary': summary
                     })
-                    print(f"-> Found via Fallback ({link}): {title[:50]}...")
-    except ImportError:
-         print("Cloudscraper not installed, skipping fallback.")
-    except Exception as e:
-         print(f"Fallback Error: {e}")
-         
+                    print(f"-> Found: {title[:50]}...")
+                    
+        except Exception as e:
+            print(f"Browser error: {e}")
+            
+        finally:
+            await browser.close()
+            
     return articles
 
 def post_to_facebook(article):
@@ -133,7 +103,7 @@ def post_to_facebook(article):
     if article['summary']:
         parts.append(f"\n{article['summary']}")
         
-    parts.append(f"\n🔗 لمتابعة القراءة: {article['url']}")
+    parts.append(f"\n🔗 القراءة بالتفصيل من موقعنا: {article['url']}")
     parts.append("\n#أخبار_الجيزة #بشتيل")
     
     message = "\n".join(parts)
@@ -162,11 +132,11 @@ def post_to_facebook(article):
 # MAIN
 # ==========================================
 
-def main():
+async def main():
     import sys
     sys.stdout.reconfigure(encoding='utf-8')
     
-    print("=== Akhbar El-Giza (Direct Website Source) -> Facebook Auto-Poster ===")
+    print("=== Akhbar El-Giza (Browser Headless Reader) -> Facebook Auto-Poster ===")
     
     if not FB_ACCESS_TOKEN or "YOUR" in FB_ACCESS_TOKEN:
         print("ERROR: Configure FB_ACCESS_TOKEN first.")
@@ -174,15 +144,11 @@ def main():
 
     posted_urls = load_posted_urls()
     
-    # Try fetching from our custom endpoint first
-    latest_articles = fetch_custom_feed()
-    
-    if not latest_articles:
-        print("Custom feed empty or failed. Attempting fallback method.")
-        latest_articles = fetch_scraper_fallback()
+    # Run the playwright fetcher
+    latest_articles = await fetch_news_via_browser()
         
     if not latest_articles:
-        print("No articles found from any source.")
+        print("No articles found from the source.")
         return
     
     print(f"\nFound {len(latest_articles)} articles.")
@@ -206,4 +172,4 @@ def main():
     print(f"\nDone! Made {posts_made} new posts.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
