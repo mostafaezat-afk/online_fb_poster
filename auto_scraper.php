@@ -99,12 +99,9 @@ function publish_to_wp($title, $content, $category_name, $source_url, $image_url
     
     $cat_id = isset($CATEGORY_MAP[$category_name]) ? $CATEGORY_MAP[$category_name] : $CATEGORY_MAP['عام'];
     
-    // أضف رابط المصدر في نهاية المقال
-    $final_content = $content . "\n\n<p><a href='" . esc_url($source_url) . "' target='_blank' rel='nofollow'>المصدر</a></p>";
-    
     $post_data = [
         'post_title'    => $title,
-        'post_content'  => $final_content,
+        'post_content'  => $content,
         'post_status'   => 'publish',
         'post_author'   => 1,
         'post_category' => [$cat_id],
@@ -188,9 +185,14 @@ function fetch_youm7_content($url) {
     @$doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
     $xpath = new DOMXPath($doc);
     
-    // سحب محتوى المقال
+    // سحب محتوى المقال الكامل
     $content = '';
+    // محاولة أولى: articleBody
     $nodes = $xpath->query('//div[@id="articleBody"]//p');
+    // محاولة ثانية: article-text
+    if ($nodes->length == 0) $nodes = $xpath->query('//div[contains(@class,"article-text")]//p');
+    // محاولة ثالثة: NewsStory
+    if ($nodes->length == 0) $nodes = $xpath->query('//div[@id="NewsStory"]//p');
     if ($nodes->length > 0) {
         foreach ($nodes as $node) {
             $text = trim($node->textContent);
@@ -217,7 +219,12 @@ function fetch_almasry_content($url) {
     $xpath = new DOMXPath($doc);
     
     $content = '';
+    // محاولة أولى: NewsStory
     $nodes = $xpath->query('//div[@id="NewsStory"]//p');
+    // محاولة ثانية: article-body
+    if ($nodes->length == 0) $nodes = $xpath->query('//div[contains(@class,"article-body")]//p');
+    // محاولة ثالثة: أي div فيه article
+    if ($nodes->length == 0) $nodes = $xpath->query('//article//p');
     if ($nodes->length > 0) {
         foreach ($nodes as $node) {
             $text = trim($node->textContent);
@@ -243,7 +250,12 @@ function fetch_masrawy_content($url) {
     $xpath = new DOMXPath($doc);
     
     $content = '';
+    // محاولة أولى: ArticleDetails
     $nodes = $xpath->query('//div[contains(@class,"ArticleDetails")]//p');
+    // محاولة ثانية: article_body__
+    if ($nodes->length == 0) $nodes = $xpath->query('//div[contains(@class,"article_body")]//p');
+    // محاولة ثالثة: أي article
+    if ($nodes->length == 0) $nodes = $xpath->query('//article//p');
     if ($nodes->length > 0) {
         foreach ($nodes as $node) {
             $text = trim($node->textContent);
