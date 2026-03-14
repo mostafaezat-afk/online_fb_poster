@@ -1,37 +1,21 @@
-name: Multi-Source News Scraper
+name: Trigger Daily News Scraper
 
 on:
   schedule:
-    # Run daily at 12:00 PM UTC (2:00 PM Egypt Time)
+    # يومياً الساعة 12:00 UTC = 2:00 PM مصر
     - cron: '0 12 * * *'
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # تشغيل يدوي
 
 jobs:
-  run-scraper:
+  trigger-scraper:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
+    - name: Trigger auto_scraper.php
       run: |
-        python -m pip install --upgrade pip
-        pip install requests beautifulsoup4 feedparser playwright
-        playwright install chromium
-    
-    - name: Run multi-scraper script
-      run: python multi_scraper.py
-    
-    - name: Save posted URLs
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add multi_scraped_urls.txt || true
-        git diff --cached --quiet || git commit -m "Update multi-source scraped URLs"
-        git push || true
+        echo "Triggering scraper at $(date)..."
+        RESPONSE=$(curl -s -o response.json -w "%{http_code}" "http://elgeza.42web.io/auto_scraper.php?secret=${{ secrets.SCRAPER_SECRET }}")
+        echo "HTTP Status: $RESPONSE"
+        cat response.json
+        if [ "$RESPONSE" -ne 200 ]; then
+          echo "::warning::Scraper returned non-200 status"
+        fi
