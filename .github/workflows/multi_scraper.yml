@@ -2,20 +2,29 @@ name: Trigger Daily News Scraper
 
 on:
   schedule:
-    # تجربة مؤقتة - سيتم إرجاعه للساعة 2 الظهر بعد التأكد
-    - cron: '17 3 * * *'
+    # يومياً الساعة 12:00 UTC = 2:00 PM مصر
+    - cron: '0 12 * * *'
   workflow_dispatch: # تشغيل يدوي
 
 jobs:
   trigger-scraper:
     runs-on: ubuntu-latest
     steps:
-    - name: Trigger auto_scraper.php
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Playwright
       run: |
-        echo "Triggering scraper at $(date)..."
-        RESPONSE=$(curl -s -o response.json -w "%{http_code}" "http://elgeza.42web.io/auto_scraper.php?secret=${{ secrets.SCRAPER_SECRET }}")
-        echo "HTTP Status: $RESPONSE"
-        cat response.json
-        if [ "$RESPONSE" -ne 200 ]; then
-          echo "::warning::Scraper returned non-200 status"
-        fi
+        pip install playwright
+        playwright install chromium
+
+    - name: Run Trigger Script
+      env:
+        SCRAPER_SECRET: ${{ secrets.SCRAPER_SECRET }}
+      run: |
+        python trigger_scraper.py "http://elgeza.42web.io/auto_scraper.php?secret=$SCRAPER_SECRET"
