@@ -2,8 +2,8 @@ name: Trigger Daily News Scraper
 
 on:
   schedule:
-    # يومياً الساعة 12:00 UTC = 2:00 PM مصر
-    - cron: '0 12 * * *'
+    # تجربة مؤقتة - سيتم إرجاعه للساعة 2 الظهر بعد التأكد
+    - cron: '17 3 * * *'
   workflow_dispatch: # تشغيل يدوي
 
 jobs:
