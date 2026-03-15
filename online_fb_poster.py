@@ -22,15 +22,23 @@ POSTED_URLS_FILE = "posted_urls.txt"
 # HELPER FUNCTIONS
 # ==========================================
 
+def normalize_url(url):
+    """Normalize URL by removing protocol and trailing slashes for better deduplication."""
+    if not url: return ""
+    url = url.strip().split("://")[-1]  # Remove http:// or https://
+    url = url.rstrip('/')                # Remove trailing slash
+    return url
+
 def load_posted_urls():
     if not os.path.exists(POSTED_URLS_FILE):
         return set()
     with open(POSTED_URLS_FILE, 'r', encoding='utf-8') as f:
-        return set(line.strip() for line in f if line.strip())
+        return set(normalize_url(line) for line in f if line.strip())
 
 def save_posted_url(url):
+    norm = normalize_url(url)
     with open(POSTED_URLS_FILE, 'a', encoding='utf-8') as f:
-        f.write(url + "\n")
+        f.write(norm + "\n")
 
 async def fetch_news_via_browser():
     """Fetch news by simulating a real browser to bypass InfinityFree logic."""
@@ -156,11 +164,11 @@ async def main():
     
     posts_made = 0
     for article in latest_articles:
-        key = article['url'] 
+        key = normalize_url(article['url'])
         if key not in posted_urls:
             success = post_to_facebook(article)
             if success:
-                save_posted_url(key)
+                save_posted_url(article['url']) # Logic saves the normalized version inside save_posted_url
                 posted_urls.add(key)
                 posts_made += 1
                 time.sleep(5)
